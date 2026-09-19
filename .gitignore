@@ -1,4 +1,16 @@
-instance/
+# Python
 __pycache__/
-*.db
-*.pyc
+*.py[cod]
+
+# Virtual environment
+venv/
+.venv/
+
+# Environment variables / secrets
+.env
+
+# Database
+instance/*.db
+
+# IDE
+.vscode/
