@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Currency Chat — Live Converter</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💱</text></svg>">
+<meta name="description" content="Convert any currency just by typing naturally. Supports 160+ currencies, symbols, names and ISO codes.">
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#f5f0e8; --surface:#fffdf9; --border:#e0d8cc;
+  --accent:#b85c2a; --accent-lt:#f2e4d8; --text:#2c2416;
+  --muted:#9a8e7e; --user-bg:#2c2416; --user-text:#f5f0e8;
+  --bot-bg:#ffffff; --bot-border:#e8dfd3;
+  --tag-bg:#fdf3e3; --tag-border:#e8c97a; --tag-text:#7a5a1a;
+  --shadow:0 1px 3px rgba(44,36,22,.08);
+}
+body {
+  font-family:'Inter',sans-serif; background:var(--bg); color:var(--text);
+  height:100vh; display:flex; flex-direction:column; align-items:center;
+}
+body::before {
+  content:''; position:fixed; inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none; z-index:0;
+}
+
+/* ---- Modal ---- */
+#modal-overlay {
+  position:fixed; inset:0; background:rgba(44,36,22,.45);
+  display:flex; align-items:center; justify-content:center;
+  z-index:200; backdrop-filter:blur(3px);
+}
+#modal-overlay.hidden { display:none; }
+.modal {
+  background:var(--surface); border:1px solid var(--border); border-radius:18px;
+  padding:36px 32px 28px; max-width:360px; width:90%;
+  box-shadow:0 16px 48px rgba(44,36,22,.18); text-align:center;
+}
+.modal-icon { font-size:32px; margin-bottom:14px; }
+.modal h2 { font-family:'Lora',serif; font-size:20px; font-weight:600; margin-bottom:8px; }
+.modal p  { font-size:14px; color:var(--muted); margin-bottom:24px; line-height:1.6; }
+.modal-btns { display:flex; gap:10px; justify-content:center; }
+.modal-btn {
+  padding:10px 28px; border-radius:10px; font-size:14px;
+  font-family:'Inter',sans-serif; font-weight:500; cursor:pointer; border:none;
+  transition:opacity .15s,transform .1s;
+}
+.modal-btn:active { transform:scale(.97); }
+.modal-btn.yes { background:var(--accent); color:#fff; }
+.modal-btn.yes:hover { opacity:.88; }
+.modal-btn.no { background:transparent; color:var(--muted); border:1px solid var(--border); }
+.modal-btn.no:hover { background:var(--accent-lt); color:var(--text); }
+
+/* ---- Header ---- */
+.header {
+  position:relative; z-index:10; width:100%; max-width:700px;
+  padding:12px 16px; display:flex; align-items:center; justify-content:space-between;
+  border-bottom:1px solid var(--border); background:var(--surface);
+  flex-wrap:wrap; gap:8px;
+}
+.header-left { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.avatar {
+  width:36px; height:36px; background:var(--accent); border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:17px; flex-shrink:0;
+}
+.header-name   { font-family:'Lora',serif; font-size:15px; font-weight:600; }
+.header-status { font-size:11px; color:var(--muted); margin-top:1px; display:flex; align-items:center; gap:4px; }
+.status-dot    { width:6px; height:6px; background:#5aaa72; border-radius:50%; display:inline-block; flex-shrink:0; }
+.header-right  { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+/* ---- Base currency selector ---- */
+.base-wrap { position:relative; display:flex; align-items:center; gap:6px; }
+.base-label { font-size:11px; color:var(--muted); white-space:nowrap; }
+.base-input-wrap { position:relative; }
+#base-input {
+  width:110px; background:var(--bg); border:1px solid var(--border);
+  border-radius:8px; padding:6px 10px; font-size:13px;
+  font-family:'Inter',sans-serif; color:var(--text); outline:none;
+  transition:border-color .2s; cursor:pointer; text-align:center; font-weight:500;
+}
+#base-input:focus { border-color:var(--accent); }
+#base-dropdown {
+  display:none; position:absolute; top:calc(100% + 4px); left:0;
+  width:200px; max-height:240px; overflow-y:auto;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; box-shadow:0 8px 24px rgba(44,36,22,.12); z-index:100;
+}
+#base-dropdown.open { display:block; }
+#base-search {
+  width:100%; padding:8px 12px; border:none; border-bottom:1px solid var(--border);
+  background:var(--surface); font-size:13px; font-family:'Inter',sans-serif;
+  color:var(--text); outline:none; position:sticky; top:0;
+}
+.base-dropdown-list { padding:4px 0; }
+.base-option {
+  padding:8px 14px; font-size:13px; cursor:pointer; color:var(--text); transition:background .1s;
+}
+.base-option:hover { background:var(--accent-lt); color:var(--accent); }
+.base-option.selected { color:var(--accent); font-weight:600; background:var(--accent-lt); }
+
+.hbtn {
+  background:none; border:1px solid var(--border); border-radius:8px;
+  padding:6px 12px; font-size:12px; font-family:'Inter',sans-serif;
+  color:var(--muted); cursor:pointer; transition:all .15s;
+}
+.hbtn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-lt); }
+
+/* ---- Extra target chips ---- */
+.extra-wrap { display:flex; align-items:center; gap:6px; flex-wrap:nowrap; }
+.target-tags { display:flex; align-items:center; gap:4px; flex-wrap:wrap; max-width:200px; }
+.target-tag {
+  display:flex; align-items:center; gap:4px;
+  background:var(--accent-lt); border:1px solid var(--accent);
+  border-radius:20px; padding:3px 8px 3px 10px;
+  font-size:12px; font-weight:500; color:var(--accent); white-space:nowrap;
+}
+.target-tag button {
+  background:none; border:none; cursor:pointer; color:var(--accent);
+  font-size:14px; padding:0; line-height:1; opacity:.7; transition:opacity .15s;
+}
+.target-tag button:hover { opacity:1; }
+.target-add-wrap { position:relative; }
+#target-input {
+  width:72px; background:var(--bg); border:1px solid var(--border);
+  border-radius:8px; padding:5px 8px; font-size:12px;
+  font-family:'Inter',sans-serif; color:var(--text); outline:none;
+  transition:border-color .2s;
+}
+#target-input:focus { border-color:var(--accent); }
+#target-input::placeholder { color:var(--muted); }
+#target-dropdown {
+  display:none; position:absolute; top:calc(100% + 4px); left:0;
+  width:160px; max-height:180px; overflow-y:auto;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; box-shadow:0 8px 24px rgba(44,36,22,.12); z-index:100;
+}
+#target-dropdown.open { display:block; }
+.target-option {
+  padding:7px 12px; font-size:12px; cursor:pointer;
+  color:var(--text); transition:background .1s;
+}
+.target-option:hover { background:var(--accent-lt); color:var(--accent); }
+
+/* ---- Chat log ---- */
+.chat-wrap {
+  position:relative; z-index:1; flex:1; width:100%; max-width:700px;
+  overflow-y:auto; padding:24px 20px 12px;
+  display:flex; flex-direction:column; gap:16px;
+}
+.chat-wrap::-webkit-scrollbar { width:4px; }
+.chat-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+
+/* ---- Bubbles ---- */
+.bubble-row { display:flex; flex-direction:column; max-width:72%; }
+.bubble-row.user { align-self:flex-end; align-items:flex-end; }
+.bubble-row.bot  { display:flex; flex-direction:row; align-items:flex-end; gap:8px; max-width:80%; align-self:flex-start; }
+.bot-avatar {
+  width:28px; height:28px; flex-shrink:0; background:var(--accent-lt);
+  border:1px solid var(--border); border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; margin-bottom:18px;
+}
+.bubble-content { display:flex; flex-direction:column; }
+.bubble-row.bot  .bubble-content { align-items:flex-start; }
+.bubble-row.user .bubble-content { align-items:flex-end; }
+.bubble {
+  padding:11px 15px; border-radius:16px; font-size:14px;
+  line-height:1.6; word-break:break-word; box-shadow:var(--shadow);
+}
+.bubble-row.user .bubble { background:var(--user-bg); color:var(--user-text); border-bottom-right-radius:4px; }
+.bubble-row.bot  .bubble { background:var(--bot-bg); color:var(--text); border:1px solid var(--bot-border); border-bottom-left-radius:4px; font-size:13.5px; }
+.ts { font-size:11px; color:var(--muted); margin-top:4px; padding:0 3px; }
+
+/* ---- Currency highlight ---- */
+.currency {
+  position:relative; background:var(--tag-bg); border:1px solid var(--tag-border);
+  color:var(--tag-text); padding:1px 6px; border-radius:5px; font-weight:500; cursor:default;
+}
+.tooltip {
+  visibility:hidden; opacity:0; position:absolute;
+  background:#2c2416; color:#f5d98a; padding:5px 10px; border-radius:8px;
+  font-size:12px; top:-36px; left:50%; transform:translateX(-50%);
+  white-space:nowrap; transition:opacity .15s; z-index:20; pointer-events:none;
+  box-shadow:0 4px 12px rgba(0,0,0,.2);
+}
+.tooltip::after {
+  content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+  border:5px solid transparent; border-top-color:#2c2416;
+}
+.currency:hover .tooltip { visibility:visible; opacity:1; }
+
+/* ---- Empty state ---- */
+.empty {
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:10px; text-align:center; padding:40px 20px; color:var(--muted);
+}
+.empty-icon  { font-size:40px; opacity:.5; margin-bottom:4px; }
+.empty-title { font-family:'Lora',serif; font-size:17px; color:var(--text); opacity:.6; }
+.empty-sub   { font-size:13px; max-width:280px; line-height:1.6; }
+.example-chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:12px; }
+.chip {
+  background:var(--surface); border:1px solid var(--border); border-radius:20px;
+  padding:6px 14px; font-size:12px; color:var(--text); cursor:pointer; transition:all .15s;
+}
+.chip:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-lt); }
+
+/* ---- Input bar ---- */
+.input-bar {
+  position:relative; z-index:10; width:100%; max-width:700px;
+  padding:12px 20px 18px; background:var(--surface); border-top:1px solid var(--border);
+}
+.input-row {
+  display:flex; gap:10px; align-items:center; background:var(--bg);
+  border:1px solid var(--border); border-radius:14px;
+  padding:6px 6px 6px 14px; transition:border-color .2s;
+}
+.input-row:focus-within { border-color:var(--accent); }
+#msg-input {
+  flex:1; background:none; border:none; outline:none;
+  font-size:14px; font-family:'Inter',sans-serif; color:var(--text); padding:4px 0;
+}
+#msg-input::placeholder { color:var(--muted); }
+#send-btn {
+  width:36px; height:36px; background:var(--accent); border:none;
+  border-radius:10px; color:#fff; font-size:16px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:opacity .15s,transform .1s; flex-shrink:0;
+}
+#send-btn:hover { opacity:.85; }
+#send-btn:active { transform:scale(.93); }
+.hint { font-size:11px; color:var(--muted); margin-top:8px; text-align:center; }
+</style>
+</head>
+<body>
+
+<!-- Modal -->
+<div id="modal-overlay">
+  <div class="modal">
+    <div class="modal-icon">💬</div>
+    <h2>Load saved messages?</h2>
+    <p></p>
+    <div class="modal-btns">
+      <button class="modal-btn yes" onclick="loadHistory()">Yes, load it</button>
+      <button class="modal-btn no"  onclick="dismissModal()">Start fresh</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <div class="avatar">💱</div>
+    <div>
+      <div class="header-name">Currency Chat</div>
+      <div class="header-status">
+        <span class="status-dot" id="rate-dot"></span>
+        <span id="rate-status">Live rates · 160+ currencies</span>
+      </div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="base-wrap">
+      <span class="base-label">Convert to:</span>
+      <div class="base-input-wrap">
+        <input id="base-input" type="text" value="USD" readonly placeholder="USD" onclick="toggleDropdown()">
+        <div id="base-dropdown">
+          <input id="base-search" type="text" placeholder="Search (e.g. INR, EUR)..." oninput="filterCurrencies(this.value)" autocomplete="off">
+          <div class="base-dropdown-list" id="base-list"></div>
+        </div>
+      </div>
+    </div>
+    <div class="extra-wrap">
+      <span class="base-label">+ also:</span>
+      <div class="target-tags" id="target-tags"></div>
+      <div class="target-add-wrap">
+        <input id="target-input" type="text" placeholder="Add..." oninput="filterTargets(this.value)" onkeydown="handleTargetKey(event)" autocomplete="off">
+        <div id="target-dropdown">
+          <div id="target-list"></div>
+        </div>
+      </div>
+    </div>
+    <button class="hbtn" onclick="confirmClear()">Clear</button>
+  </div>
+</header>
+
+<!-- Chat log -->
+<div class="chat-wrap" id="chat-log">
+  <div class="empty" id="empty-state">
+    <div class="empty-icon">💱</div>
+    <div class="empty-title">Convert any currency, just by typing naturally</div>
+    <div class="empty-sub">No forms. No dropdowns. Just type what you mean — amounts, symbols, names or codes. Pick any base currency above.</div>
+    <div class="example-chips">
+      <span class="chip" onclick="useChip(this)">$100</span>
+      <span class="chip" onclick="useChip(this)">50 euros</span>
+      <span class="chip" onclick="useChip(this)">¥5000</span>
+      <span class="chip" onclick="useChip(this)">200 GBP</span>
+      <span class="chip" onclick="useChip(this)">USD 300</span>
+      <span class="chip" onclick="useChip(this)">500 pakistani rupees</span>
+      <span class="chip" onclick="useChip(this)">1000 AED</span>
+      <span class="chip" onclick="useChip(this)">$2.3M</span>
+      <span class="chip" onclick="useChip(this)">What's the yen rate?</span>
+    </div>
+  </div>
+</div>
+
+<!-- Input -->
+<div class="input-bar">
+  <div class="input-row">
+    <input id="msg-input" type="text" placeholder="e.g. Convert $50 and €30..." autocomplete="off">
+    <button id="send-btn" onclick="sendMessage()">➤</button>
+  </div>
+  <div class="hint" id="hint-text">Supports 160+ currencies · symbols ($€£¥₹) · names (dollars, euros, pakistani rupees) · ISO codes (USD, EUR…)</div>
+</div>
+
+<script>
+const log     = document.getElementById('chat-log');
+const input   = document.getElementById('msg-input');
+const overlay = document.getElementById('modal-overlay');
+const modalP   = document.querySelector('.modal p');
+const modalYes = document.querySelector('.modal-btn.yes');
+
+let baseCurrency  = 'USD';
+let allCurrencies = [];
+let extraTargets  = [];
+
+// ---- Target chip functions ----
+function renderTargetTags() {
+  const container = document.getElementById('target-tags');
+  container.innerHTML = extraTargets.map(code =>
+    `<div class="target-tag">
+      ${code}
+      <button onclick="removeTarget('${code}')" title="Remove">×</button>
+    </div>`
+  ).join('');
+}
+
+function addTarget(code) {
+  code = code.toUpperCase().trim();
+  if (!code || code === baseCurrency || extraTargets.includes(code)) return;
+  if (!allCurrencies.includes(code)) return;
+  extraTargets.push(code);
+  renderTargetTags();
+  document.getElementById('target-input').value = '';
+  document.getElementById('target-dropdown').classList.remove('open');
+}
+
+function removeTarget(code) {
+  extraTargets = extraTargets.filter(c => c !== code);
+  renderTargetTags();
+}
+
+// ---- Currency name/symbol → ISO code map for search ----
+const CURRENCY_SEARCH_MAP = {
+  // Symbols
+  '$':'USD','€':'EUR','£':'GBP','¥':'JPY','₹':'INR','₽':'RUB',
+  '₺':'TRY','₩':'KRW','₪':'ILS','฿':'THB','₫':'VND','₦':'NGN',
+  '₴':'UAH','₸':'KZT','₾':'GEL','₼':'AZN','﷼':'SAR',
+  // Single names
+  'dollar':'USD','dollars':'USD','euro':'EUR','euros':'EUR',
+  'pound':'GBP','pounds':'GBP','yen':'JPY','rupee':'INR','rupees':'INR',
+  'won':'KRW','lira':'TRY','ruble':'RUB','rubles':'RUB',
+  'franc':'CHF','francs':'CHF','rand':'ZAR','baht':'THB',
+  'dong':'VND','dirham':'AED','dirhams':'AED','riyal':'SAR',
+  'ringgit':'MYR','rupiah':'IDR','yuan':'CNY','renminbi':'CNY',
+  'peso':'MXN','real':'BRL','krona':'SEK','krone':'NOK',
+  'shekel':'ILS','shekels':'ILS','dinar':'KWD','taka':'BDT',
+  'naira':'NGN','cedi':'GHS','birr':'ETB','shilling':'KES',
+  'hryvnia':'UAH','tenge':'KZT','som':'KGS','tugrik':'MNT',
+  // Qualified names
+  'us dollar':'USD','american dollar':'USD',
+  'australian dollar':'AUD','canadian dollar':'CAD',
+  'singaporean dollar':'SGD','hong kong dollar':'HKD',
+  'new zealand dollar':'NZD','swiss franc':'CHF',
+  'british pound':'GBP','japanese yen':'JPY',
+  'chinese yuan':'CNY','indian rupee':'INR',
+  'pakistani rupee':'PKR','saudi riyal':'SAR',
+  'emirati dirham':'AED','thai baht':'THB',
+  'south african rand':'ZAR','turkish lira':'TRY',
+  'russian ruble':'RUB','brazilian real':'BRL',
+  'malaysian ringgit':'MYR','indonesian rupiah':'IDR',
+  'nigerian naira':'NGN','kenyan shilling':'KES',
+  'bangladeshi taka':'BDT','vietnamese dong':'VND',
+  'sri lankan rupee':'LKR','nepalese rupee':'NPR',
+  'kuwaiti dinar':'KWD','bahraini dinar':'BHD',
+  'qatari riyal':'QAR','omani rial':'OMR',
+  'swedish krona':'SEK','norwegian krone':'NOK',
+  'danish krone':'DKK','czech koruna':'CZK',
+  'hungarian forint':'HUF','polish zloty':'PLN',
+  'mexican peso':'MXN','argentine peso':'ARS',
+  'chilean peso':'CLP','colombian peso':'COP',
+  'philippine peso':'PHP','south korean won':'KRW',
+  'egyptian pound':'EGP','ghanaian cedi':'GHS',
+  'ethiopian birr':'ETB','ugandan shilling':'UGX',
+};
+
+function filterTargets(q) {
+  const dd = document.getElementById('target-dropdown');
+  const list = document.getElementById('target-list');
+  if (!q) { dd.classList.remove('open'); return; }
+  const ql = q.toLowerCase().trim();
+
+  const resolved = CURRENCY_SEARCH_MAP[ql];
+  const nameMatches = resolved ? [resolved] :
+    Object.entries(CURRENCY_SEARCH_MAP)
+      .filter(([name]) => name.includes(ql))
+      .map(([, code]) => code);
+
+  const codeMatches = allCurrencies.filter(c =>
+    c.toLowerCase().includes(ql)
+  );
+
+  const filtered = [...new Set([...codeMatches, ...nameMatches])]
+    .filter(c => allCurrencies.includes(c) && c !== baseCurrency && !extraTargets.includes(c))
+    .slice(0, 20);
+
+  if (!filtered.length) { dd.classList.remove('open'); return; }
+  list.innerHTML = filtered.map(code =>
+    `<div class="target-option" onclick="addTarget('${code}')">${code}</div>`
+  ).join('');
+  dd.classList.add('open');
+}
+
+function handleTargetKey(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const val = document.getElementById('target-input').value.trim();
+    if (val) addTarget(val);
+  }
+  if (e.key === 'Escape') {
+    document.getElementById('target-dropdown').classList.remove('open');
+  }
+}
+
+// Close target dropdown on outside click
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.target-add-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('target-dropdown').classList.remove('open');
+  }
+});
+
+// ---- Currency dropdown ----
+async function loadCurrencies() {
+  try {
+    const res  = await fetch('/currencies');
+    allCurrencies = await res.json();
+    renderList(allCurrencies);
+  } catch (e) {
+    console.error('Could not load currencies', e);
+  }
+}
+
+function renderList(list) {
+  const container = document.getElementById('base-list');
+  container.innerHTML = list.map(code =>
+    `<div class="base-option${code === baseCurrency ? ' selected' : ''}"
+          onclick="selectBase('${code}')">${code}</div>`
+  ).join('');
+}
+
+function filterCurrencies(q) {
+  if (!q) { renderList([]); return; }
+  const ql = q.toLowerCase().trim();
+
+  const resolved = CURRENCY_SEARCH_MAP[ql];
+  if (resolved) {
+    renderList(allCurrencies.filter(c => c === resolved));
+    return;
+  }
+
+  const nameMatches = Object.entries(CURRENCY_SEARCH_MAP)
+    .filter(([name]) => name.includes(ql))
+    .map(([, code]) => code);
+
+  const codeMatches = allCurrencies.filter(c =>
+    c.toLowerCase().includes(ql)
+  );
+
+  const merged = [...new Set([...codeMatches, ...nameMatches])]
+    .filter(c => allCurrencies.includes(c));
+
+  renderList(merged);
+}
+
+function toggleDropdown() {
+  const dd = document.getElementById('base-dropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) {
+    setTimeout(() => document.getElementById('base-search').focus(), 50);
+    document.getElementById('base-search').value = '';
+    renderList(allCurrencies);
+  }
+}
+
+function selectBase(code) {
+  baseCurrency = code;
+  document.getElementById('base-input').value = code;
+  document.getElementById('base-dropdown').classList.remove('open');
+  document.getElementById('hint-text').textContent =
+    `Converting to ${code} · supports 160+ currencies · symbols ($€£¥₹) · names · ISO codes`;
+  renderList(allCurrencies);
+  updateRateAge(); // ← add this line
+}
+
+document.addEventListener('click', e => {
+  const baseWrap = document.querySelector('.base-input-wrap');
+  if (baseWrap && !baseWrap.contains(e.target)) {
+    document.getElementById('base-dropdown').classList.remove('open');
+  }
+});
+
+// ---- Scroll ----
+function scrollBottom() { log.scrollTop = log.scrollHeight; }
+
+function removeEmpty() {
+  const e = document.getElementById('empty-state');
+  if (e) e.remove();
+}
+
+// ---- Bubbles ----
+function addBubble(type, content, time) {
+  removeEmpty();
+  const row = document.createElement('div');
+  row.className = `bubble-row ${type}`;
+  if (type === 'bot') {
+    row.innerHTML = `
+      <div class="bot-avatar">💱</div>
+      <div class="bubble-content">
+        <div class="bubble">${content}</div>
+        <span class="ts">${time}</span>
+      </div>`;
+  } else {
+    row.innerHTML = `
+      <div class="bubble-content">
+        <div class="bubble">${content}</div>
+        <span class="ts">${time}</span>
+      </div>`;
+  }
+  log.appendChild(row);
+  scrollBottom();
+}
+
+// ---- Modal ----
+async function updateRateAge() {
+  try {
+    const res  = await fetch(`/rate-age?base=${baseCurrency}`);
+    const data = await res.json();
+    const dot  = document.getElementById('rate-dot');
+    const txt  = document.getElementById('rate-status');
+    if (data.minutes === null) {
+      txt.textContent = 'Rates not yet loaded';
+      dot.style.background = '#9a8e7e';
+    } else if (data.minutes < 20) {
+      txt.textContent = `Rates updated ${data.minutes} min ago`;
+      dot.style.background = '#5aaa72'; // green
+    } else {
+      txt.textContent = `Rates updated ${data.minutes} min ago · refreshing soon`;
+      dot.style.background = '#e0a030'; // amber
+    }
+  } catch (e) {
+    // fail silently
+  }
+}
+
+async function checkHistory() {
+  modalP.textContent = 'You have a previous conversation saved. Would you like to pick up where you left off?';
+  modalYes.style.display = 'inline-block';
+  const res  = await fetch('/history');
+  const data = await res.json();
+  if (data.length === 0) {
+    modalP.textContent = 'No saved messages found. Start a fresh conversation!';
+    modalYes.style.display = 'none';
+  }
+}
+
+async function loadHistory() {
+  overlay.classList.add('hidden');
+  const res  = await fetch('/history');
+  const data = await res.json();
+  data.forEach(m => addBubble(m.type, m.content, m.created_at));
+  scrollBottom();
+}
+
+function dismissModal() { overlay.classList.add('hidden'); }
+
+// ---- Send ----
+async function sendMessage() {
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  input.disabled = true;
+
+  try {
+    const res  = await fetch('/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, base: baseCurrency, targets: extraTargets })
+    });
+    const data = await res.json();
+    data.forEach(m => addBubble(m.type, m.content, m.created_at));
+  } catch (e) {
+    addBubble('bot', '⚠ Could not reach server. Check your connection.', '--:--');
+  }
+
+  input.disabled = false;
+  input.focus();
+}
+
+// ---- Clear ----
+async function confirmClear() {
+  if (!confirm('Clear all messages? This cannot be undone.')) return;
+  await fetch('/clear', { method: 'POST' });
+  log.innerHTML = `
+    <div class="empty" id="empty-state">
+      <div class="empty-icon">💱</div>
+      <div class="empty-title">Chat cleared</div>
+      <div class="empty-sub">Start a new conversation below.</div>
+      <div class="example-chips">
+        <span class="chip" onclick="useChip(this)">$100</span>
+        <span class="chip" onclick="useChip(this)">50 euros</span>
+        <span class="chip" onclick="useChip(this)">¥5000</span>
+        <span class="chip" onclick="useChip(this)">200 GBP</span>
+        <span class="chip" onclick="useChip(this)">500 pakistani rupees</span>
+        <span class="chip" onclick="useChip(this)">1000 AED</span>
+      </div>
+    </div>`;
+}
+
+// ---- Chips ----
+function useChip(el) { input.value = el.textContent; input.focus(); }
+
+// ---- Enter ----
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// ---- Init ----
+loadCurrencies();
+checkHistory();
+updateRateAge();
+setInterval(updateRateAge, 60000); // refresh every minute
+</script>
+</body>
+</html>
