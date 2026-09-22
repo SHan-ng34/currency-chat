@@ -4,6 +4,8 @@ A conversational currency converter that understands how people naturally write 
 
 Instead of requiring users to select currencies and enter amounts into separate fields, Currency Chat lets users type monetary references in natural language and converts them into a chosen base currency.
 
+**[🚀 Live Demo](https://currency-chat.onrender.com/)** · **[💻 GitHub](https://github.com/SHan-ng34/currency-chat)**
+
 ## Problem
 
 People frequently encounter international monetary values while reading articles, comparing prices, planning trips, or discussing expenses.
