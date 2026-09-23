@@ -1,11 +1,12 @@
 import re
 import requests
+import uuid
 from datetime import datetime, timedelta, timezone
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "change-this-in-production"
+app.config["SECRET_KEY"] = "change-this-in-production-use-a-random-string"
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///currency_chat.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -17,6 +18,7 @@ db = SQLAlchemy(app)
 
 class Message(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(64), nullable=False, index=True)
     msg_type   = db.Column(db.String(10), nullable=False)
     content    = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -467,6 +469,8 @@ def process_message(msg, rates, base="USD"):
 
 @app.route("/")
 def chat():
+    if "sid" not in session:
+        session["sid"] = str(uuid.uuid4())
     return render_template("chat.html")
 
 @app.route("/currencies")
@@ -487,7 +491,10 @@ def rate_age():
 
 @app.route("/history")
 def history():
-    messages = Message.query.order_by(Message.created_at).all()
+    sid = session.get("sid")
+    if not sid:
+        return jsonify([])
+    messages = Message.query.filter_by(session_id=sid).order_by(Message.created_at).all()
     return jsonify([{
         "type":       m.msg_type,
         "content":    m.content,
@@ -496,6 +503,11 @@ def history():
 
 @app.route("/send", methods=["POST"])
 def send():
+    # Assign session ID if first visit
+    if "sid" not in session:
+        session["sid"] = str(uuid.uuid4())
+    sid = session["sid"]
+
     data = request.json
     raw  = data.get("message", "").strip()
     # Sanitise — strip HTML tags to prevent XSS on public URL
@@ -562,7 +574,7 @@ def send():
         bot_replies = merged
     results = []
 
-    user_msg = Message(msg_type="user", content=highlighted_msg)
+    user_msg = Message(session_id=sid, msg_type="user", content=highlighted_msg)
     db.session.add(user_msg)
     db.session.flush()
     results.append({
@@ -572,7 +584,7 @@ def send():
     })
 
     for reply in bot_replies:
-        bot_msg = Message(msg_type="bot", content=reply)
+        bot_msg = Message(session_id=sid, msg_type="bot", content=reply)
         db.session.add(bot_msg)
         db.session.flush()
         results.append({
@@ -586,8 +598,10 @@ def send():
 
 @app.route("/clear", methods=["POST"])
 def clear():
-    Message.query.delete()
-    db.session.commit()
+    sid = session.get("sid")
+    if sid:
+        Message.query.filter_by(session_id=sid).delete()
+        db.session.commit()
     return jsonify({"ok": True})
 
 # -------------------------
